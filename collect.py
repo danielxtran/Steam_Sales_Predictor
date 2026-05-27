@@ -92,6 +92,7 @@ def _fetch_itad_history(session, app_id: int) -> None:
 def collect_batch(app_ids: list[int], fetch_itad: bool = True) -> None:
     session = Session()
     saved = skipped = 0
+    total = len(app_ids)
 
     try:
         for i, app_id in enumerate(app_ids, start=1):
@@ -114,7 +115,7 @@ def collect_batch(app_ids: list[int], fetch_itad: bool = True) -> None:
             session.commit()
             saved += 1
             logger.info("[%d/%d] %s (id=%d, discount=%d%%)",
-                        i, len(app_ids), parsed["title"], app_id, parsed["discount_pct"])
+                        i, total, parsed["title"], app_id, parsed["discount_pct"])
 
     except KeyboardInterrupt:
         logger.info("Interrupted — committing progress")

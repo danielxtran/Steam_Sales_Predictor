@@ -11,8 +11,9 @@ logger = logging.getLogger(__name__)
 _STORE_API = "https://store.steampowered.com/api"
 _STEAM_API = "https://api.steampowered.com"
 
-# Steam's store API rate limit is roughly 200 requests/5 min; 1.5s delay keeps us well under.
-REQUEST_DELAY = 1.5
+# Steam's store API rate limit is roughly 200 requests/5 min.
+# At 1.0s delay we use ~60 req/min — well under the limit.
+REQUEST_DELAY = 1.0
 
 
 def _get(url: str, params: dict | None = None, retries: int = 3) -> Optional[dict]:
@@ -108,6 +109,7 @@ def get_app_details(app_id: int) -> Optional[dict]:
     if not entry.get("success"):
         return None
     return entry.get("data")
+
 
 
 def _compute_discount(initial_cents: int | None, final_cents: int | None) -> int:
