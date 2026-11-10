@@ -8,3 +8,4 @@
 - Added pytest tests for `parse_game`, `_compute_discount`, and the ITAD history parser, using saved responses in `tests/fixtures/`; network calls are blocked in tests.
 - Added a GitHub Actions CI workflow that runs ruff and pytest on pull requests and pushes to `main`.
 - Rewrote `README.md` with project overview, setup, collector usage, and how to run tests.
+- Updated `CLAUDE.md` file map and known gaps for the new layout.

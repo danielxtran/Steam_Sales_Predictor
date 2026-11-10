@@ -54,8 +54,7 @@ These are settled. Do not change them without being asked; record any change in
   ruff check .
   pytest
   ```
-  (Neither is set up yet — the first task that adds tests should add `ruff` and
-  `pytest` as dev dependencies and create `tests/`.)
+  Install them with `pip install -e ".[dev]"` (use a `.venv`). CI runs both.
 - Add one line to `CHANGELOG.md` for each change.
 - Add a dated line to `docs/decisions.md` for any design decision.
 - When done, summarize what changed and why in plain language for a learner, and
@@ -65,15 +64,16 @@ These are settled. Do not change them without being asked; record any change in
 
 | Path | What it does |
 | --- | --- |
-| `collect.py` | CLI entry point. Creates tables, picks app IDs (seed / SteamSpy popular / random), fetches Steam details, writes games and price snapshots, optionally fetches ITAD history. Flags: `--seed`, `--limit`, `--popular`, `--no-itad`, `--backfill-itad`, `--full-history`, `--schedule`. |
-| `config.py` | Loads `.env`, exposes `STEAM_API_KEY` / `ITAD_API_KEY`, builds the SQLAlchemy `engine` and `Session`. |
-| `db/models.py` | SQLAlchemy tables: `games`, `price_snapshots`, `itad_games` (Steam app ID → ITAD ID), `itad_price_history`. |
-| `collectors/steam.py` | Steam Store / Web API client: featured-category seed list, full app list, `appdetails` fetch with rate-limit delay and retries, `parse_game()` to normalize a response. |
-| `collectors/itad.py` | ITAD API client: `lookup_game()` (Steam app ID → ITAD game) and `get_price_history()`. |
-| `collectors/steamspy.py` | SteamSpy client returning popular app IDs ranked by player count. |
+| `collector/cli.py` | CLI entry point (`python -m collector.cli`). Creates tables, picks app IDs (seed / SteamSpy popular / random), fetches Steam details, writes games and price snapshots, optionally fetches ITAD history. Flags: `--seed`, `--limit`, `--popular`, `--no-itad`, `--backfill-itad`, `--full-history`, `--schedule`. |
+| `collector/settings.py` | Loads `.env`, exposes `STEAM_API_KEY` / `ITAD_API_KEY`, reads `DATABASE_URL` (default: `data/steam_prices.db` under the project root), builds the SQLAlchemy `engine` and `Session`. |
+| `collector/db/models.py` | SQLAlchemy tables: `games`, `price_snapshots`, `itad_games` (Steam app ID → ITAD ID), `itad_price_history`. |
+| `collector/sources/steam.py` | Steam Store / Web API client: featured-category seed list, full app list, `appdetails` fetch with rate-limit delay and retries, `parse_game()` to normalize a response. |
+| `collector/sources/itad.py` | ITAD API client: `lookup_game()` (Steam app ID → ITAD game) and `get_price_history()`. |
+| `collector/sources/steamspy.py` | SteamSpy client returning popular app IDs ranked by player count. |
+| `tests/` | pytest tests. `conftest.py` blocks HTTP and uses an in-memory DB; `fixtures/` holds saved API responses. |
 | `notebooks/data_exploration.ipynb` | Exploratory analysis and draft ML features from the local DB. |
-| `notebooks/model_creation.ipynb` | Empty placeholder for future modelling. |
-| `requirements.txt` | Pinned runtime dependencies (`requests`, `sqlalchemy`, `python-dotenv`, `schedule`). |
+| `pyproject.toml` | Package metadata, pinned runtime dependencies, `notebooks` and `dev` extras, ruff and pytest config. |
+| `.github/workflows/ci.yml` | Runs ruff and pytest on pull requests and pushes to `main`. |
 | `.env.example` | Template listing the settings `.env` should define. |
 | `data/` | Local SQLite database (gitignored; do not touch `steam_prices.db`). |
 | `CHANGELOG.md` | One line per change. |
@@ -84,12 +84,13 @@ These are settled. Do not change them without being asked; record any change in
 The existing code predates some fixed decisions. Fix these only in tasks that ask
 for them, one at a time:
 
-- `config.py` hardcodes a SQLite path instead of reading `DATABASE_URL`.
+- `DATABASE_URL` is read, but no Postgres driver is installed yet, so a Neon URL
+  will not work until one is added.
 - Prices are stored as `Float` dollars, not integer cents (`price_snapshots`,
   `itad_price_history`, and `parse_game()` divides by 100).
 - `price_snapshots` gets a new row every run, even when the price is unchanged;
   there is no per-game last-checked time.
 - `itad_price_history` stores every shop, not just Steam.
 - Scheduling uses the `schedule` library in a long-running loop, not GitHub Actions.
-- No linter config, no `tests/` directory, no fixtures, and no GitHub Actions
-  workflows exist yet.
+- Stored timestamps use naive `datetime.utcnow()` (deprecated in 3.12).
+- `Optional[...]` type hints could be modernized to `X | None`.
