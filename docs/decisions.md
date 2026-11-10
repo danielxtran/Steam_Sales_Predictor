@@ -14,3 +14,4 @@ One dated line per decision, newest at the bottom.
 - 2026-11-09: Keep only Steam-store history from ITAD.
 - 2026-11-10: Organize code as one installable `collector` package: API clients in `collector/sources/`, tables in `collector/db/`, config in `collector/settings.py`, CLI in `collector/cli.py`.
 - 2026-11-10: When `DATABASE_URL` is unset, default to `data/steam_prices.db` resolved from the project root (not the current directory), so notebooks and scripts run from any folder use the same file.
+- 2026-11-10: Declare dependencies in `pyproject.toml` (setuptools backend) with `notebooks` and `dev` optional extras; runtime pins carried over from `requirements.txt`.

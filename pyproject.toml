@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "steam-sales-predictor"
+version = "0.1.0"
+description = "Steam price tracker that collects US price history for sale predictions."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "requests==2.32.5",
+    "sqlalchemy==2.0.50",
+    "python-dotenv==1.2.2",
+    "schedule==1.2.2",
+]
+
+[project.optional-dependencies]
+notebooks = [
+    "pandas",
+    "numpy",
+    "matplotlib",
+    "seaborn",
+    "jupyter",
+]
+dev = [
+    "pytest",
+    "ruff",
+]
+
+[tool.setuptools.packages.find]
+include = ["collector*"]
+
+[tool.ruff]
+target-version = "py312"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
