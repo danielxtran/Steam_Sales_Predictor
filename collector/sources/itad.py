@@ -4,7 +4,7 @@ from typing import Optional
 
 import requests
 
-from config import ITAD_API_KEY
+from collector.settings import ITAD_API_KEY
 
 logger = logging.getLogger(__name__)
 

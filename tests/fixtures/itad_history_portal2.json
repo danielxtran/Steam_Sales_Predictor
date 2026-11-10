@@ -1,0 +1,33 @@
+[
+  {
+    "timestamp": "2024-11-26T18:02:13+01:00",
+    "shop": {"id": 61, "name": "Steam"},
+    "deal": {
+      "price": {"amount": 1.99, "amountInt": 199, "currency": "USD"},
+      "regular": {"amount": 9.99, "amountInt": 999, "currency": "USD"},
+      "cut": 80
+    }
+  },
+  {
+    "timestamp": "2024-12-03T19:00:41+01:00",
+    "shop": {"id": 61, "name": "Steam"},
+    "deal": {
+      "price": {"amount": 9.99, "amountInt": 999, "currency": "USD"},
+      "regular": {"amount": 9.99, "amountInt": 999, "currency": "USD"},
+      "cut": 0
+    }
+  },
+  {
+    "timestamp": "2024-12-05T10:15:00+00:00",
+    "shop": {"id": 35, "name": "GOG"},
+    "deal": {
+      "price": {"amount": 4.99, "amountInt": 499, "currency": "USD"},
+      "regular": {"amount": 9.99, "amountInt": 999, "currency": "USD"},
+      "cut": 50
+    }
+  },
+  {
+    "timestamp": "not-a-date",
+    "deal": {}
+  }
+]

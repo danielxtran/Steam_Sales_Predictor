@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
-Steam price data collector — Phase 1 entry point.
+Steam price data collector — command-line entry point.
 
 Usage
 -----
-  python collect.py                  # collect one batch of 200 games
-  python collect.py --seed           # first run: seed with top-played games
-  python collect.py --limit 500      # collect up to 500 games per run
-  python collect.py --no-itad        # skip ITAD history (faster, Steam only)
-  python collect.py --schedule       # run daily at 09:00 (runs once immediately too)
+  python -m collector.cli                  # collect one batch of 200 games
+  python -m collector.cli --seed           # first run: seed with top-played games
+  python -m collector.cli --limit 500      # collect up to 500 games per run
+  python -m collector.cli --no-itad        # skip ITAD history (faster, Steam only)
+  python -m collector.cli --schedule       # run daily at 09:00 (runs once immediately too)
 """
 import argparse
 import logging
@@ -18,11 +18,16 @@ from datetime import datetime
 
 import schedule
 
-from collectors.itad import get_price_history, lookup_game
-from collectors.steam import get_all_app_ids, get_app_details, get_top_played_app_ids, parse_game
-from collectors.steamspy import get_top_app_ids
-from config import Session, engine
-from db.models import Base, Game, ITADGame, ITADPriceHistory, PriceSnapshot
+from collector.db.models import Base, Game, ITADGame, ITADPriceHistory, PriceSnapshot
+from collector.settings import Session, engine
+from collector.sources.itad import get_price_history, lookup_game
+from collector.sources.steam import (
+    get_all_app_ids,
+    get_app_details,
+    get_top_played_app_ids,
+    parse_game,
+)
+from collector.sources.steamspy import get_top_app_ids
 
 logging.basicConfig(
     level=logging.INFO,
