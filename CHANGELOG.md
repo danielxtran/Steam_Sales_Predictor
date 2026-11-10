@@ -5,3 +5,4 @@
 - Deleted the empty `notebooks/model_creation.ipynb`.
 - Added `DATABASE_URL` to `.env.example`, explaining the SQLite default.
 - Configured ruff (explicit rule set, notebooks excluded) and sorted imports to match.
+- Added pytest tests for `parse_game`, `_compute_discount`, and the ITAD history parser, using saved responses in `tests/fixtures/`; network calls are blocked in tests.
