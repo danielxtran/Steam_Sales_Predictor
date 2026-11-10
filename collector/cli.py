@@ -18,11 +18,16 @@ from datetime import datetime
 
 import schedule
 
-from collector.sources.itad import get_price_history, lookup_game
-from collector.sources.steam import get_all_app_ids, get_app_details, get_top_played_app_ids, parse_game
-from collector.sources.steamspy import get_top_app_ids
-from collector.settings import Session, engine
 from collector.db.models import Base, Game, ITADGame, ITADPriceHistory, PriceSnapshot
+from collector.settings import Session, engine
+from collector.sources.itad import get_price_history, lookup_game
+from collector.sources.steam import (
+    get_all_app_ids,
+    get_app_details,
+    get_top_played_app_ids,
+    parse_game,
+)
+from collector.sources.steamspy import get_top_app_ids
 
 logging.basicConfig(
     level=logging.INFO,

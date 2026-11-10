@@ -15,3 +15,4 @@ One dated line per decision, newest at the bottom.
 - 2026-11-10: Organize code as one installable `collector` package: API clients in `collector/sources/`, tables in `collector/db/`, config in `collector/settings.py`, CLI in `collector/cli.py`.
 - 2026-11-10: When `DATABASE_URL` is unset, default to `data/steam_prices.db` resolved from the project root (not the current directory), so notebooks and scripts run from any folder use the same file.
 - 2026-11-10: Declare dependencies in `pyproject.toml` (setuptools backend) with `notebooks` and `dev` optional extras; runtime pins carried over from `requirements.txt`.
+- 2026-11-10: Lint with ruff using an explicit rule set (`E4`, `E7`, `E9`, `F`, `I`) so ruff upgrades do not change what CI enforces; notebooks are exploratory and excluded from lint.

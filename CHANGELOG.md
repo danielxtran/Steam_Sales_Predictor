@@ -4,3 +4,4 @@
 - Replaced `requirements.txt` with `pyproject.toml`; notebook packages are in the `notebooks` extra and pytest/ruff in the `dev` extra.
 - Deleted the empty `notebooks/model_creation.ipynb`.
 - Added `DATABASE_URL` to `.env.example`, explaining the SQLite default.
+- Configured ruff (explicit rule set, notebooks excluded) and sorted imports to match.
