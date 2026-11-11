@@ -1,6 +1,7 @@
 import json
 import os
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import requests
@@ -44,3 +45,43 @@ def block_network(monkeypatch):
         raise RuntimeError("Tests must not call real APIs; use tests/fixtures/ instead")
 
     monkeypatch.setattr(requests.sessions.Session, "request", _blocked)
+
+
+class FakeResponse:
+    def __init__(self, status_code=200, body=None, headers=None):
+        self.status_code = status_code
+        self._body = body
+        self.headers = headers or {}
+
+    def json(self):
+        if self._body is None:
+            raise ValueError("no JSON body")
+        return self._body
+
+
+@pytest.fixture
+def steam_http(monkeypatch):
+    """
+    Replace HTTP calls in the Steam client with queued fake responses, and record sleeps
+    instead of waiting. Queue responses with `steam_http.responses.append(...)`; a callable
+    entry is called with the request params so it can answer based on them.
+    """
+    from collector.sources import steam
+
+    rec = SimpleNamespace(responses=[], calls=[], sleeps=[])
+
+    def fake_get(url, params=None, timeout=None):
+        rec.calls.append((url, params))
+        if not rec.responses:
+            raise AssertionError(f"unexpected request to {url}")
+        response = rec.responses.pop(0)
+        if callable(response):
+            response = response(params)
+        if isinstance(response, Exception):
+            raise response
+        return response
+
+    monkeypatch.setattr(steam.requests, "get", fake_get)
+    monkeypatch.setattr(steam.time, "sleep", rec.sleeps.append)
+    monkeypatch.setattr(steam, "store_limiter", steam.RateLimiter(0, sleep=rec.sleeps.append))
+    return rec

@@ -28,44 +28,32 @@ def _get(params: dict, retries: int = 3) -> Optional[dict]:
     return None
 
 
-def get_top_app_ids(pages: int = 5) -> list[int]:
-    """
-    Return popular app IDs from SteamSpy, sorted by recent player count.
+class SteamSpyError(Exception):
+    """A SteamSpy request failed after all retries."""
 
-    Each page has ~1000 games. Page 0 = most popular, page 1 = next tier, etc.
-    5 pages gives ~5000 games covering essentially everything meaningful on Steam.
+
+TOP_LISTS = ("top100in2weeks", "top100forever", "top100owned")
+
+
+def get_top_list_app_ids() -> list[int]:
+    """
+    Return app IDs from SteamSpy's top-100 lists (by recent players, all-time players,
+    and owners), most popular first. Raises SteamSpyError if any list can't be fetched,
+    so callers never treat a partial result as complete.
     """
     app_ids: list[int] = []
     seen: set[int] = set()
-
-    # Named lists first — guaranteed to include the very top games
-    for request_type in ("top100in2weeks", "top100forever", "top100owned"):
+    for request_type in TOP_LISTS:
         data = _get({"request": request_type})
-        if data:
-            for aid in data:
-                try:
-                    aid_int = int(aid)
-                    if aid_int not in seen:
-                        app_ids.append(aid_int)
-                        seen.add(aid_int)
-                except ValueError:
-                    pass
-        time.sleep(_PAGE_DELAY)
-
-    # Paginated "all games" sorted by 2-week player count
-    for page in range(pages):
-        data = _get({"request": "all", "page": page})
-        if not data:
-            break
+        if data is None:
+            raise SteamSpyError(f"could not fetch SteamSpy {request_type}")
         for aid in data:
             try:
                 aid_int = int(aid)
-                if aid_int not in seen:
-                    app_ids.append(aid_int)
-                    seen.add(aid_int)
             except ValueError:
-                pass
-        logger.info("SteamSpy page %d: %d total popular IDs so far", page, len(app_ids))
+                continue
+            if aid_int not in seen:
+                app_ids.append(aid_int)
+                seen.add(aid_int)
         time.sleep(_PAGE_DELAY)
-
     return app_ids

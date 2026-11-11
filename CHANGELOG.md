@@ -16,3 +16,5 @@
 - Added `scripts/appdetails_batch_experiment.py`, which showed `appdetails` accepts up to 200 app IDs per call with `filters=price_overview` (500 fails).
 - Added `games.details_checked_at` (backfilled from `updated_at`) and an index on `poll_state.next_check_at`.
 - Added the psycopg driver; plain `postgresql://` and `postgres://` URLs now use it.
+- Split collection into `collector.jobs.catalog` (new games, hot tier), `collector.jobs.prices` (due games, hot first, batched, saves only changes, reschedules 6 h / 2 days), and `collector.jobs.itad`; the CLI now just runs a job and the `--schedule` loop and `schedule` dependency are gone.
+- Steam client spaces store requests 1.5 s apart, backs off on HTTP 429 (Retry-After or 30/60/120 s), and never logs query strings, so the API key cannot appear in logs.
