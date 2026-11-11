@@ -25,7 +25,7 @@ cp .env.example .env
 Then fill in `.env`:
 
 - `ITAD_API_KEY` — needed for price history. Get one at <https://isthereanydeal.com/dev/app/>.
-- `STEAM_API_KEY` — optional; lets the full app list be filtered to games only.
+- `STEAM_API_KEY` — needed by the catalog job to fetch the full game list. Get one at <https://steamcommunity.com/dev/apikey>.
 - `DATABASE_URL` — leave blank to use the local SQLite file `data/steam_prices.db`.
   Relative SQLite paths like `sqlite:///data/v2.db` are resolved from the project root.
 
@@ -48,14 +48,29 @@ python scripts/migrate_sqlite.py data/old_copy.db
 
 ## Running the collector
 
+Collection is split into jobs. Each ends by logging a one-line summary
+(`checked=... changed=... failed=... in ...s`).
+
 ```bash
-python -m collector.cli --help             # list all options
-python -m collector.cli --seed             # first run: seed with top-played games
-python -m collector.cli --limit 500        # collect up to 500 new games
-python -m collector.cli --popular          # pick games by SteamSpy popularity
-python -m collector.cli --no-itad          # Steam prices only (faster)
-python -m collector.cli --backfill-itad    # fetch ITAD history for games missing it
+python -m collector.jobs.catalog            # add new games, mark hot games (daily)
+python -m collector.jobs.prices --limit 50  # re-check due games, save price changes
+python -m collector.jobs.itad --limit 100   # backfill Steam-store history from ITAD
+python -m collector.cli prices --limit 50   # same jobs through one entry point
 ```
+
+The prices job checks due games hot tier first. Prices are fetched in batches of 100
+per call, and full details are fetched only for new games or games whose details are
+over 30 days old (`--details-limit` per run). Requests are spaced to stay under
+Steam's limit of about 200 per 5 minutes, and the job backs off on HTTP 429. Hot games
+are re-checked every 6 hours, normal games every 2 days. See `docs/data.md`.
+
+### Scheduled runs (GitHub Actions)
+
+`.github/workflows/catalog.yml` runs daily and `.github/workflows/prices.yml` every
+3 hours. Both run `alembic upgrade head` first and need these repository secrets
+(Settings > Secrets and variables > Actions): `DATABASE_URL` (the Neon Postgres URL),
+`STEAM_API_KEY`, and `ITAD_API_KEY`. To run one now: Actions tab > pick the workflow >
+**Run workflow**.
 
 ## Running tests and lint
 
@@ -74,9 +89,10 @@ collector/
   cli.py          command-line entry point
   settings.py     reads .env and DATABASE_URL, creates the database engine
   db/models.py    database tables (see docs/data.md)
+  jobs/           catalog, prices, and itad jobs
   sources/        Steam, SteamSpy, and IsThereAnyDeal API clients
 migrations/       Alembic migrations
-scripts/          one-off scripts (old database migration)
+scripts/          one-off scripts (old database migration, appdetails experiment)
 tests/            pytest tests and fixtures
 notebooks/        exploratory analysis
 docs/data.md      tables, columns, and data sources

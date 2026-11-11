@@ -19,3 +19,4 @@
 - Split collection into `collector.jobs.catalog` (new games, hot tier), `collector.jobs.prices` (due games, hot first, batched, saves only changes, reschedules 6 h / 2 days), and `collector.jobs.itad`; the CLI now just runs a job and the `--schedule` loop and `schedule` dependency are gone.
 - Steam client spaces store requests 1.5 s apart, backs off on HTTP 429 (Retry-After or 30/60/120 s), and never logs query strings, so the API key cannot appear in logs.
 - Added `catalog.yml` (daily) and `prices.yml` (every 3 hours, 15-minute cap) GitHub Actions workflows with manual runs, migrations first, and secrets for the database and API keys.
+- Updated README, `docs/data.md`, and CLAUDE.md for the jobs and workflows.
