@@ -64,20 +64,23 @@ These are settled. Do not change them without being asked; record any change in
 
 | Path | What it does |
 | --- | --- |
-| `collector/cli.py` | CLI entry point (`python -m collector.cli`). Creates tables, picks app IDs (seed / SteamSpy popular / random), fetches Steam details, writes games and price snapshots, optionally fetches ITAD history. Flags: `--seed`, `--limit`, `--popular`, `--no-itad`, `--backfill-itad`, `--full-history`, `--schedule`. |
-| `collector/settings.py` | Loads `.env`, exposes `STEAM_API_KEY` / `ITAD_API_KEY`, reads `DATABASE_URL` (default: `data/steam_prices.db` under the project root), builds the SQLAlchemy `engine` and `Session`. |
-| `collector/db/models.py` | SQLAlchemy tables: `games`, `price_snapshots`, `itad_games` (Steam app ID → ITAD ID), `itad_price_history`. |
-| `collector/sources/steam.py` | Steam Store / Web API client: featured-category seed list, full app list, `appdetails` fetch with rate-limit delay and retries, `parse_game()` to normalize a response. |
-| `collector/sources/itad.py` | ITAD API client: `lookup_game()` (Steam app ID → ITAD game) and `get_price_history()`. |
+| `collector/cli.py` | CLI entry point (`python -m collector.cli`). Checks the schema exists, picks app IDs (seed / SteamSpy popular / random), fetches Steam details, upserts games and genres, writes a `price_changes` row only when the price changed, updates `poll_state`, optionally fetches Steam-store ITAD history. Flags: `--seed`, `--limit`, `--popular`, `--no-itad`, `--backfill-itad`, `--full-history`, `--schedule`. |
+| `collector/settings.py` | Loads `.env`, exposes `STEAM_API_KEY` / `ITAD_API_KEY`, reads `DATABASE_URL` (default `sqlite:///data/steam_prices.db`; relative SQLite paths resolve from the project root), builds the SQLAlchemy `engine` and `Session`. |
+| `collector/db/models.py` | SQLAlchemy tables: `games`, `genres`, `game_genres`, `price_changes`, `poll_state`, `itad_games`, `sale_calendar`; `UTCDateTime` type. Documented in `docs/data.md`. |
+| `alembic.ini`, `migrations/` | Alembic config and migrations. `env.py` reads `DATABASE_URL` from settings and refuses to run on an old-schema database. Create tables with `alembic upgrade head`. |
+| `scripts/migrate_sqlite.py` | One-off copy of an old-schema SQLite file (opened read-only) into the database at `DATABASE_URL`. |
+| `collector/sources/steam.py` | Steam Store / Web API client: featured-category seed list, full app list, `appdetails` fetch with rate-limit delay and retries, `parse_game()` to normalize a response (prices in cents), `parse_release_date()`. |
+| `collector/sources/itad.py` | ITAD API client: `lookup_game()` (Steam app ID → ITAD game) and `get_price_history()` (prices in cents). |
 | `collector/sources/steamspy.py` | SteamSpy client returning popular app IDs ranked by player count. |
 | `tests/` | pytest tests. `conftest.py` blocks HTTP and uses an in-memory DB; `fixtures/` holds saved API responses. |
 | `notebooks/data_exploration.ipynb` | Exploratory analysis and draft ML features from the local DB. |
 | `pyproject.toml` | Package metadata, pinned runtime dependencies, `notebooks` and `dev` extras, ruff and pytest config. |
 | `.github/workflows/ci.yml` | Runs ruff and pytest on pull requests and pushes to `main`. |
 | `.env.example` | Template listing the settings `.env` should define. |
-| `data/` | Local SQLite database (gitignored; do not touch `steam_prices.db`). |
+| `data/` | Local SQLite databases (gitignored). `steam_prices.db` is the old-schema original: never touch it. `v2.db` is the migrated Phase 0 database. |
 | `CHANGELOG.md` | One line per change. |
 | `docs/decisions.md` | Dated log of design decisions. |
+| `docs/data.md` | Every table and column, and where its data comes from. |
 
 ## Known gaps between current code and the rules above
 
@@ -86,11 +89,12 @@ for them, one at a time:
 
 - `DATABASE_URL` is read, but no Postgres driver is installed yet, so a Neon URL
   will not work until one is added.
-- Prices are stored as `Float` dollars, not integer cents (`price_snapshots`,
-  `itad_price_history`, and `parse_game()` divides by 100).
-- `price_snapshots` gets a new row every run, even when the price is unchanged;
-  there is no per-game last-checked time.
-- `itad_price_history` stores every shop, not just Steam.
+- `poll_state.tier` and `next_check_at` are stored but not used: the collector still
+  picks only games it hasn't seen yet.
+- `sale_calendar` exists but nothing fills it.
+- `notebooks/data_exploration.ipynb` still queries the old tables
+  (`price_snapshots`, `itad_price_history`) and needs updating for the new schema.
+- ITAD rows migrated from the old DB have no `initial_cents` and timestamps that may
+  be off by ITAD's UTC offset (see `docs/data.md`).
 - Scheduling uses the `schedule` library in a long-running loop, not GitHub Actions.
-- Stored timestamps use naive `datetime.utcnow()` (deprecated in 3.12).
 - `Optional[...]` type hints could be modernized to `X | None`.
