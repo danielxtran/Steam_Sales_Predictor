@@ -9,3 +9,4 @@
 - Added a GitHub Actions CI workflow that runs ruff and pytest on pull requests and pushes to `main`.
 - Rewrote `README.md` with project overview, setup, collector usage, and how to run tests.
 - Updated `CLAUDE.md` file map and known gaps for the new layout.
+- Relative SQLite paths in `DATABASE_URL` (e.g. `sqlite:///data/v2.db`) now resolve from the project root.
