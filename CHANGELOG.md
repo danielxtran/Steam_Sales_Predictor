@@ -15,3 +15,4 @@
 - Added `docs/data.md` describing every table and column; updated README, CLAUDE.md, and `.env.example` for migrations.
 - Added `scripts/appdetails_batch_experiment.py`, which showed `appdetails` accepts up to 200 app IDs per call with `filters=price_overview` (500 fails).
 - Added `games.details_checked_at` (backfilled from `updated_at`) and an index on `poll_state.next_check_at`.
+- Added the psycopg driver; plain `postgresql://` and `postgres://` URLs now use it.
