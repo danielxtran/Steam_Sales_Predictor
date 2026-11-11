@@ -2,6 +2,8 @@
 """
 Steam price data collector — command-line entry point.
 
+Run "alembic upgrade head" once before first use to create the tables.
+
 Usage
 -----
   python -m collector.cli                  # collect one batch of 200 games
@@ -14,11 +16,20 @@ import argparse
 import logging
 import random
 import time
-from datetime import datetime
+from datetime import timezone
 
 import schedule
+from sqlalchemy import inspect
 
-from collector.db.models import Base, Game, ITADGame, ITADPriceHistory, PriceSnapshot
+from collector.db.models import (
+    Game,
+    GameGenre,
+    Genre,
+    ITADGame,
+    PollState,
+    PriceChange,
+    utcnow,
+)
 from collector.settings import Session, engine
 from collector.sources.itad import get_price_history, lookup_game
 from collector.sources.steam import (
@@ -41,29 +52,65 @@ logger = logging.getLogger(__name__)
 # DB helpers
 # ---------------------------------------------------------------------------
 
-def init_db() -> None:
-    Base.metadata.create_all(engine)
+def check_db() -> bool:
+    """Tables are created by Alembic migrations, not by this script."""
+    if not inspect(engine).has_table(PriceChange.__tablename__):
+        logger.error("Database at %s has no schema. Run 'alembic upgrade head' first.", engine.url)
+        return False
     logger.info("Database ready at %s", engine.url)
+    return True
+
+
+def _get_or_create_genre(session, name: str) -> Genre:
+    genre = session.query(Genre).filter_by(name=name).one_or_none()
+    if genre is None:
+        genre = Genre(name=name)
+        session.add(genre)
+        session.flush()
+    return genre
 
 
 def _upsert_game(session, parsed: dict) -> None:
-    game = session.get(Game, parsed["app_id"]) or Game(app_id=parsed["app_id"])
-    for field in ("title", "developer", "publisher", "genres", "release_date",
-                  "metacritic_score", "total_reviews", "is_free"):
+    game = session.get(Game, parsed["app_id"])
+    if game is None:
+        game = Game(app_id=parsed["app_id"])
+        session.add(game)
+    for field in ("title", "developer", "publisher", "release_date",
+                  "metacritic_score", "total_reviews", "is_free", "type"):
         setattr(game, field, parsed.get(field))
-    game.last_updated = datetime.utcnow()
-    session.merge(game)
+    game.updated_at = utcnow()
+    session.flush()
+
+    session.query(GameGenre).filter_by(app_id=game.app_id).delete()
+    for name in dict.fromkeys(parsed.get("genres") or []):
+        session.add(GameGenre(app_id=game.app_id, genre_id=_get_or_create_genre(session, name).id))
 
 
-def _add_price_snapshot(session, parsed: dict) -> None:
-    if parsed.get("current_price") is None and not parsed.get("is_free"):
-        return  # price data unavailable (region-locked, unreleased, etc.)
-    session.add(PriceSnapshot(
+def _record_price(session, parsed: dict) -> None:
+    """Store a price row only if it differs from the last Steam price, and mark the game checked."""
+    now = utcnow()
+    state = session.get(PollState, parsed["app_id"]) or PollState(app_id=parsed["app_id"])
+    state.last_checked_at = now
+    state.last_error = None
+    session.merge(state)
+
+    if parsed.get("final_cents") is None:
+        return  # no price (free, region-locked, unreleased, etc.)
+    last = (
+        session.query(PriceChange)
+        .filter_by(app_id=parsed["app_id"], source="steam")
+        .order_by(PriceChange.observed_at.desc())
+        .first()
+    )
+    if last and (last.initial_cents, last.final_cents) == (parsed["initial_cents"], parsed["final_cents"]):
+        return
+    session.add(PriceChange(
         app_id=parsed["app_id"],
-        current_price=parsed.get("current_price"),
-        original_price=parsed.get("original_price"),
+        observed_at=now,
+        initial_cents=parsed["initial_cents"],
+        final_cents=parsed["final_cents"],
         discount_pct=parsed.get("discount_pct", 0),
-        on_sale=parsed.get("on_sale", False),
+        source="steam",
     ))
 
 
@@ -80,13 +127,25 @@ def _fetch_itad_history(session, app_id: int) -> None:
         )
         session.merge(itad_record)
 
+    existing = {
+        row[0] for row in
+        session.query(PriceChange.observed_at).filter_by(app_id=app_id, source="itad")
+    }
     for entry in get_price_history(itad_record.itad_id):
-        session.add(ITADPriceHistory(
+        # Only Steam-store history is kept; other shops' prices don't apply to Steam sales.
+        if entry["shop"] != "Steam" or entry["recorded_at"] is None or entry["price_cents"] is None:
+            continue
+        observed_at = entry["recorded_at"].astimezone(timezone.utc)
+        if observed_at in existing:
+            continue
+        existing.add(observed_at)
+        session.add(PriceChange(
             app_id=app_id,
-            shop=entry["shop"],
-            price=entry["price"],
-            discount_pct=entry["discount_pct"],
-            recorded_at=entry["recorded_at"],
+            observed_at=observed_at,
+            initial_cents=entry["regular_cents"],
+            final_cents=entry["price_cents"],
+            discount_pct=entry["discount_pct"] or 0,
+            source="itad",
         ))
 
 
@@ -112,7 +171,7 @@ def collect_batch(app_ids: list[int], fetch_itad: bool = True) -> None:
                 continue
 
             _upsert_game(session, parsed)
-            _add_price_snapshot(session, parsed)
+            _record_price(session, parsed)
 
             if fetch_itad:
                 _fetch_itad_history(session, app_id)
@@ -135,7 +194,7 @@ def backfill_itad(limit: int = 0, full_history: bool = False) -> None:
     """
     Fetch ITAD history for games that are missing it.
 
-    full_history=True  — wipe existing itad_price_history rows and re-fetch
+    full_history=True  — wipe existing ITAD price_changes rows and re-fetch
                          everything from 2012 onwards. Use this once after the
                          'since' parameter bug was fixed.
     full_history=False — only process games that have zero history rows (default).
@@ -144,11 +203,14 @@ def backfill_itad(limit: int = 0, full_history: bool = False) -> None:
 
     if full_history:
         logger.info("Clearing existing ITAD price history for full re-fetch...")
-        session.query(ITADPriceHistory).delete()
+        session.query(PriceChange).filter_by(source="itad").delete()
         session.commit()
         all_game_ids = [row[0] for row in session.query(Game.app_id).all()]
     else:
-        have_history = {row[0] for row in session.query(ITADPriceHistory.app_id).distinct().all()}
+        have_history = {
+            row[0] for row in
+            session.query(PriceChange.app_id).filter_by(source="itad").distinct().all()
+        }
         all_game_ids = [row[0] for row in session.query(Game.app_id).all()]
         all_game_ids = [aid for aid in all_game_ids if aid not in have_history]
 
@@ -237,7 +299,8 @@ def main() -> None:
                         help="With --backfill-itad: wipe and re-fetch all history from 2012 (fixes the missing 'since' param)")
     args = parser.parse_args()
 
-    init_db()
+    if not check_db():
+        raise SystemExit(1)
     fetch_itad = not args.no_itad
 
     if args.backfill_itad:

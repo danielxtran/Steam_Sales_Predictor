@@ -10,3 +10,4 @@
 - Rewrote `README.md` with project overview, setup, collector usage, and how to run tests.
 - Updated `CLAUDE.md` file map and known gaps for the new layout.
 - Relative SQLite paths in `DATABASE_URL` (e.g. `sqlite:///data/v2.db`) now resolve from the project root.
+- Replaced the tables with the Phase 0 schema (`games`, `genres`, `game_genres`, `price_changes`, `poll_state`, `itad_games`, `sale_calendar`), created by Alembic migrations; the collector now stores cents, writes a price row only when the price changes, records last-checked time, and keeps only Steam-store ITAD history.

@@ -1,8 +1,9 @@
 import copy
+from datetime import date
 
 import pytest
 
-from collector.sources.steam import _compute_discount, parse_game
+from collector.sources.steam import _compute_discount, parse_game, parse_release_date
 from tests.conftest import load_fixture
 
 
@@ -19,13 +20,14 @@ def test_parse_game_full_price(portal2):
         "title": "Portal 2",
         "developer": "Valve",
         "publisher": "Valve",
-        "genres": "Action,Adventure",
-        "release_date": "Apr 18, 2011",
+        "genres": ["Action", "Adventure"],
+        "release_date": date(2011, 4, 18),
         "metacritic_score": 95,
         "total_reviews": 392931,
         "is_free": False,
-        "current_price": 9.99,
-        "original_price": 9.99,
+        "type": "game",
+        "final_cents": 999,
+        "initial_cents": 999,
         "discount_pct": 0,
         "on_sale": False,
     }
@@ -36,8 +38,8 @@ def test_parse_game_on_sale(portal2):
 
     parsed = parse_game(620, portal2)
 
-    assert parsed["current_price"] == 1.99
-    assert parsed["original_price"] == 9.99
+    assert parsed["final_cents"] == 199
+    assert parsed["initial_cents"] == 999
     assert parsed["discount_pct"] == 80
     assert parsed["on_sale"] is True
 
@@ -59,8 +61,8 @@ def test_parse_game_free_game_has_no_price(portal2):
     parsed = parse_game(620, portal2)
 
     assert parsed["is_free"] is True
-    assert parsed["current_price"] is None
-    assert parsed["original_price"] is None
+    assert parsed["final_cents"] is None
+    assert parsed["initial_cents"] is None
     assert parsed["discount_pct"] == 0
     assert parsed["on_sale"] is False
 
@@ -84,3 +86,21 @@ def test_parse_game_skips_non_games(portal2):
 )
 def test_compute_discount(initial, final, expected):
     assert _compute_discount(initial, final) == expected
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("Oct 21, 2020", date(2020, 10, 21)),
+        ("21 Oct, 2020", date(2020, 10, 21)),
+        ("August 3, 2021", date(2021, 8, 3)),
+        ("Q1 2027", None),
+        ("August 2026", None),
+        ("2026", None),
+        ("Coming soon", None),
+        ("", None),
+        (None, None),
+    ],
+)
+def test_parse_release_date(text, expected):
+    assert parse_release_date(text) == expected

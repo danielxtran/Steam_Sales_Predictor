@@ -9,6 +9,7 @@ description = "Steam price tracker that collects US price history for sale predi
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "alembic==1.20.1",
     "requests==2.32.5",
     "sqlalchemy==2.0.50",
     "python-dotenv==1.2.2",
