@@ -25,3 +25,4 @@ One dated line per decision, newest at the bottom.
 - 2026-11-10: Genres are a separate `genres` table linked by `game_genres` instead of a comma-separated string.
 - 2026-11-10: Release dates are stored as dates only when Steam gives an exact day; quarters, months, and "Coming soon" become NULL.
 - 2026-11-10: Steam and ITAD parsers return integer cents (Steam's own cent values; ITAD's `amountInt`) so no float dollars enter the database.
+- 2026-11-10: Migrate old data by copying into a fresh, empty database in one transaction rather than upgrading in place; ITAD timestamps from the old file are treated as UTC because their offset was never stored.
