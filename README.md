@@ -27,6 +27,24 @@ Then fill in `.env`:
 - `ITAD_API_KEY` — needed for price history. Get one at <https://isthereanydeal.com/dev/app/>.
 - `STEAM_API_KEY` — optional; lets the full app list be filtered to games only.
 - `DATABASE_URL` — leave blank to use the local SQLite file `data/steam_prices.db`.
+  Relative SQLite paths like `sqlite:///data/v2.db` are resolved from the project root.
+
+Create the tables:
+
+```bash
+alembic upgrade head
+```
+
+### Moving data from the old database
+
+Databases made before the Alembic schema can't be upgraded in place. Copy one into a
+new database instead (the old file is only read):
+
+```bash
+# with DATABASE_URL=sqlite:///data/v2.db in .env
+alembic upgrade head
+python scripts/migrate_sqlite.py data/old_copy.db
+```
 
 ## Running the collector
 
@@ -55,9 +73,12 @@ CI runs both on every pull request and on pushes to `main`.
 collector/
   cli.py          command-line entry point
   settings.py     reads .env and DATABASE_URL, creates the database engine
-  db/models.py    database tables
+  db/models.py    database tables (see docs/data.md)
   sources/        Steam, SteamSpy, and IsThereAnyDeal API clients
+migrations/       Alembic migrations
+scripts/          one-off scripts (old database migration)
 tests/            pytest tests and fixtures
 notebooks/        exploratory analysis
+docs/data.md      tables, columns, and data sources
 docs/decisions.md design decision log
 ```

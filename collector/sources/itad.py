@@ -53,11 +53,22 @@ def lookup_game(steam_app_id: int) -> Optional[dict]:
     return data.get("game")
 
 
+def _amount_cents(price: dict | None) -> Optional[int]:
+    """Read an ITAD price object ({amount, amountInt, currency}) as integer cents."""
+    if not price:
+        return None
+    if price.get("amountInt") is not None:
+        return int(price["amountInt"])
+    if price.get("amount") is not None:
+        return round(price["amount"] * 100)
+    return None
+
+
 def get_price_history(itad_id: str, country: str = "US", since: str = "2012-01-01T00:00:00Z") -> list[dict]:
     """
     Fetch all historical price points for a game across every store ITAD tracks.
 
-    Returns a flat list of dicts: {shop, price, discount_pct, recorded_at}.
+    Returns a flat list of dicts: {shop, price_cents, regular_cents, discount_pct, recorded_at}.
     Each entry is one price event: {timestamp, shop: {id, name}, deal: {price, regular, cut}}.
     The default `since` goes back to 2012 to capture all Steam sale history.
     Without this parameter the API only returns the last ~3 entries.
@@ -79,7 +90,8 @@ def get_price_history(itad_id: str, country: str = "US", since: str = "2012-01-0
         deal = entry.get("deal") or {}
         results.append({
             "shop": (entry.get("shop") or {}).get("name", "unknown"),
-            "price": (deal.get("price") or {}).get("amount"),
+            "price_cents": _amount_cents(deal.get("price")),
+            "regular_cents": _amount_cents(deal.get("regular")),
             "discount_pct": deal.get("cut", 0),
             "recorded_at": recorded_at,
         })

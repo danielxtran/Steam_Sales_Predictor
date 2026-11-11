@@ -9,3 +9,7 @@
 - Added a GitHub Actions CI workflow that runs ruff and pytest on pull requests and pushes to `main`.
 - Rewrote `README.md` with project overview, setup, collector usage, and how to run tests.
 - Updated `CLAUDE.md` file map and known gaps for the new layout.
+- Relative SQLite paths in `DATABASE_URL` (e.g. `sqlite:///data/v2.db`) now resolve from the project root.
+- Replaced the tables with the Phase 0 schema (`games`, `genres`, `game_genres`, `price_changes`, `poll_state`, `itad_games`, `sale_calendar`), created by Alembic migrations; the collector now stores cents, writes a price row only when the price changes, records last-checked time, and keeps only Steam-store ITAD history.
+- Added `scripts/migrate_sqlite.py` to copy an old-schema SQLite file (read-only) into the new schema, with tests on a tiny sample database.
+- Added `docs/data.md` describing every table and column; updated README, CLAUDE.md, and `.env.example` for migrations.

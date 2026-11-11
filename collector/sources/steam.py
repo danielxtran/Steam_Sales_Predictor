@@ -1,5 +1,6 @@
 import logging
 import time
+from datetime import date, datetime
 from typing import Optional
 
 import requests
@@ -111,13 +112,30 @@ def get_app_details(app_id: int) -> Optional[dict]:
     return entry.get("data")
 
 
-
 def _compute_discount(initial_cents: int | None, final_cents: int | None) -> int:
     """Return the real discount % from raw cent values, ignoring Steam's reported figure."""
     if not initial_cents or initial_cents <= 0:
         return 0
     final = final_cents if final_cents is not None else initial_cents
     return round((1 - final / initial_cents) * 100)
+
+
+_RELEASE_DATE_FORMATS = ("%b %d, %Y", "%d %b, %Y", "%B %d, %Y", "%d %B, %Y")
+
+
+def parse_release_date(text: str | None) -> Optional[date]:
+    """
+    Parse Steam's release date text ("Oct 21, 2020", "21 Oct, 2020") into a date.
+    Returns None for anything without an exact day ("Q1 2027", "August 2026", "Coming soon").
+    """
+    if not text:
+        return None
+    for fmt in _RELEASE_DATE_FORMATS:
+        try:
+            return datetime.strptime(text.strip(), fmt).date()
+        except ValueError:
+            continue
+    return None
 
 
 def parse_game(app_id: int, raw: dict) -> Optional[dict]:
@@ -138,14 +156,15 @@ def parse_game(app_id: int, raw: dict) -> Optional[dict]:
         "title": raw.get("name"),
         "developer": devs[0] if devs else None,
         "publisher": pubs[0] if pubs else None,
-        "genres": ",".join(genres),
-        "release_date": raw.get("release_date", {}).get("date"),
+        "genres": genres,
+        "release_date": parse_release_date(raw.get("release_date", {}).get("date")),
         "metacritic_score": (raw.get("metacritic") or {}).get("score"),
         "total_reviews": (raw.get("recommendations") or {}).get("total", 0),
         "is_free": raw.get("is_free", False),
-        # price_overview is absent for free games; prices are in cents
-        "current_price": price["final"] / 100 if price.get("final") is not None else None,
-        "original_price": price["initial"] / 100 if price.get("initial") is not None else None,
+        "type": raw.get("type"),
+        # price_overview is absent for free games; Steam reports prices in cents
+        "final_cents": price.get("final"),
+        "initial_cents": price.get("initial"),
         # Compute discount from actual prices — Steam's reported discount_percent is
         # sometimes wrong (e.g. returns 100 when prices haven't changed).
         "discount_pct": _compute_discount(price.get("initial"), price.get("final")),
