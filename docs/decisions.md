@@ -34,3 +34,4 @@ One dated line per decision, newest at the bottom.
 - 2026-11-11: Failed checks still update last_checked_at and reschedule on the normal interval, with the reason in last_error, so a broken game can't be retried in a tight loop; a run stops early after a persistent 429.
 - 2026-11-11: Space store API requests 1.5 s apart (about 200 per 5 minutes) with one shared limiter, rather than per-call sleeps.
 - 2026-11-11: Full appdetails (title, genres, ...) are fetched only for games never fetched or not fetched in 30 days, capped per run by --details-limit; all other games use batched price-only calls.
+- 2026-11-11: Scheduled workflows share one concurrency group so two jobs never write at once; prices runs at most 15 minutes (the job itself stops starting requests at 10).

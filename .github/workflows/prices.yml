@@ -1,0 +1,51 @@
+name: Prices
+
+# Re-check due games and save price changes.
+on:
+  schedule:
+    - cron: "23 */3 * * *"   # every 3 hours, off the top of the hour
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "Max games to check"
+        default: "5000"
+
+# Never run two collection jobs against the database at once.
+concurrency:
+  group: collector
+  cancel-in-progress: false
+
+jobs:
+  prices:
+    runs-on: ubuntu-latest
+    # The job itself stops starting requests after 10 minutes; this is the hard cap.
+    timeout-minutes: 15
+    env:
+      STEAM_API_KEY: ${{ secrets.STEAM_API_KEY }}
+      ITAD_API_KEY: ${{ secrets.ITAD_API_KEY }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Check secrets
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::The DATABASE_URL repository secret is not set"
+            exit 1
+          fi
+
+      - name: Install
+        run: pip install .
+
+      - name: Migrate database
+        run: alembic upgrade head
+
+      - name: Check prices
+        env:
+          LIMIT: ${{ inputs.limit || '5000' }}
+        run: python -m collector.jobs.prices --limit "$LIMIT" --details-limit 150 --max-minutes 10

@@ -1,0 +1,46 @@
+name: Catalog
+
+# Add new Steam games and update which games are hot.
+on:
+  schedule:
+    - cron: "7 6 * * *"   # daily at 06:07 UTC
+  workflow_dispatch:
+
+# Never run two collection jobs against the database at once.
+concurrency:
+  group: collector
+  cancel-in-progress: false
+
+jobs:
+  catalog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      STEAM_API_KEY: ${{ secrets.STEAM_API_KEY }}
+      ITAD_API_KEY: ${{ secrets.ITAD_API_KEY }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Check secrets
+        run: |
+          for name in DATABASE_URL STEAM_API_KEY; do
+            if [ -z "${!name}" ]; then
+              echo "::error::The $name repository secret is not set"
+              exit 1
+            fi
+          done
+
+      - name: Install
+        run: pip install .
+
+      - name: Migrate database
+        run: alembic upgrade head
+
+      - name: Update catalog
+        run: python -m collector.jobs.catalog
