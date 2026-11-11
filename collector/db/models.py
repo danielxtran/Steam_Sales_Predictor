@@ -61,6 +61,8 @@ class Game(Base):
     type = Column(String, nullable=False, default="game")   # Steam app type
     created_at = Column(UTCDateTime, nullable=False, default=utcnow)
     updated_at = Column(UTCDateTime, nullable=False, default=utcnow, onupdate=utcnow)
+    # Last full appdetails fetch; None means only the catalog's app ID and name are known.
+    details_checked_at = Column(UTCDateTime)
 
 
 class Genre(Base):
@@ -98,6 +100,7 @@ class PriceChange(Base):
 class PollState(Base):
     """When each game was last checked and when it is due next."""
     __tablename__ = "poll_state"
+    __table_args__ = (Index("ix_poll_state_next_check_at", "next_check_at"),)
 
     app_id = Column(Integer, ForeignKey("games.app_id"), primary_key=True)
     tier = Column(String, nullable=False, default="normal")   # "hot" or "normal"

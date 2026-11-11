@@ -27,3 +27,4 @@ One dated line per decision, newest at the bottom.
 - 2026-11-10: Steam and ITAD parsers return integer cents (Steam's own cent values; ITAD's `amountInt`) so no float dollars enter the database.
 - 2026-11-10: Migrate old data by copying into a fresh, empty database in one transaction rather than upgrading in place; ITAD timestamps from the old file are treated as UTC because their offset was never stored.
 - 2026-11-11: Fetch prices with batched `appdetails?filters=price_overview` calls of 100 IDs: the experiment showed 200 work and 500 fail, so 100 leaves a margin.
+- 2026-11-11: Track full-details freshness in a separate `games.details_checked_at` column, so catalog-added games (name only) are distinguishable from fully fetched ones.
