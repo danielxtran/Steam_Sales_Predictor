@@ -5,48 +5,52 @@ from typing import Optional
 import requests
 
 from collector.settings import ITAD_API_KEY
+from collector.sources.steam import RateLimiter
 
 logger = logging.getLogger(__name__)
 
 _BASE = "https://api.isthereanydeal.com"
 
 
+# ITAD doesn't publish a rate limit; one request per second is a conservative pace.
+itad_limiter = RateLimiter(1.0)
+
+
+class ITADError(Exception):
+    """An ITAD request failed (as opposed to ITAD answering "not found")."""
+
+
 def _get(path: str, params: dict | None = None) -> Optional[dict | list]:
+    """
+    GET an ITAD endpoint and return its JSON. Raises ITADError on any failure.
+    Log and error messages never include the URL's query string (the API key).
+    """
     if not ITAD_API_KEY:
-        logger.debug("ITAD_API_KEY not set — skipping ITAD fetch")
-        return None
+        raise ITADError("ITAD_API_KEY is not set")
+    itad_limiter.wait()
     try:
         resp = requests.get(
             f"{_BASE}{path}",
             params={"key": ITAD_API_KEY, **(params or {})},
             timeout=10,
         )
-        resp.raise_for_status()
-        return resp.json()
     except requests.RequestException as exc:
-        logger.warning("ITAD request failed: %s", exc)
-        return None
-
-
-def _post(path: str, body: list, params: dict | None = None) -> Optional[list]:
-    if not ITAD_API_KEY:
-        return None
+        raise ITADError(f"{path}: {type(exc).__name__}") from None
+    if resp.status_code == 429:
+        raise ITADError(f"{path}: rate limited (HTTP 429)")
+    if resp.status_code >= 400:
+        raise ITADError(f"{path}: HTTP {resp.status_code}")
     try:
-        resp = requests.post(
-            f"{_BASE}{path}",
-            json=body,
-            params={"key": ITAD_API_KEY, **(params or {})},
-            timeout=10,
-        )
-        resp.raise_for_status()
         return resp.json()
-    except requests.RequestException as exc:
-        logger.warning("ITAD request failed: %s", exc)
-        return None
+    except ValueError:
+        raise ITADError(f"{path}: invalid JSON") from None
 
 
 def lookup_game(steam_app_id: int) -> Optional[dict]:
-    """Resolve a Steam app ID to an ITAD game record {id, slug, title}."""
+    """
+    Resolve a Steam app ID to an ITAD game record {id, slug, title}, or None if ITAD
+    doesn't know the game. Raises ITADError if the request fails.
+    """
     data = _get("/games/lookup/v1", {"appid": steam_app_id})
     if not data or not data.get("found"):
         return None

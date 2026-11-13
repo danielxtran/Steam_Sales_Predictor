@@ -107,6 +107,8 @@ class PollState(Base):
     last_checked_at = Column(UTCDateTime)
     next_check_at = Column(UTCDateTime)
     last_error = Column(String)
+    # Last time ITAD history was looked up (found or not); None means never tried.
+    itad_checked_at = Column(UTCDateTime)
 
 
 class ITADGame(Base):

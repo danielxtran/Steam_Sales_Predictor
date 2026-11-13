@@ -35,3 +35,6 @@ One dated line per decision, newest at the bottom.
 - 2026-11-11: Space store API requests 1.5 s apart (about 200 per 5 minutes) with one shared limiter, rather than per-call sleeps.
 - 2026-11-11: Full appdetails (title, genres, ...) are fetched only for games never fetched or not fetched in 30 days, capped per run by --details-limit; all other games use batched price-only calls.
 - 2026-11-11: Scheduled workflows share one concurrency group so two jobs never write at once; prices runs at most 15 minutes (the job itself stops starting requests at 10).
+- 2026-11-13: Track ITAD lookups per game in `poll_state.itad_checked_at`, set whether or not ITAD knows the game, so unknown games aren't retried every run; failed requests leave it unset so they are retried.
+- 2026-11-13: The ITAD client raises `ITADError` on request failures instead of returning None, so a network error is never mistaken for "game not found".
+- 2026-11-13: Fill Neon's price history by re-fetching from ITAD in GitHub Actions rather than importing the local SQLite file, because Windows Smart App Control blocks the psycopg binary locally; ITAD's data also includes the regular price and correct timestamps.
