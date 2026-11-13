@@ -1,4 +1,5 @@
 import logging
+import time
 from datetime import datetime
 from typing import Optional
 
@@ -12,12 +13,22 @@ logger = logging.getLogger(__name__)
 _BASE = "https://api.isthereanydeal.com"
 
 
-# ITAD doesn't publish a rate limit; one request per second is a conservative pace.
+# ITAD doesn't publish a rate limit; one request per second is the normal pace, and
+# HTTP 429 answers are waited out (Retry-After, or 30s, 60s, 120s) before retrying.
 itad_limiter = RateLimiter(1.0)
+RATE_LIMIT_RETRIES = 3
+BACKOFF_BASE = 30
 
 
 class ITADError(Exception):
     """An ITAD request failed (as opposed to ITAD answering "not found")."""
+
+
+def _backoff_seconds(resp, attempt: int) -> float:
+    retry_after = resp.headers.get("Retry-After", "")
+    if retry_after.isdigit():
+        return int(retry_after)
+    return BACKOFF_BASE * 2 ** attempt
 
 
 def _get(path: str, params: dict | None = None) -> Optional[dict | list]:
@@ -27,17 +38,24 @@ def _get(path: str, params: dict | None = None) -> Optional[dict | list]:
     """
     if not ITAD_API_KEY:
         raise ITADError("ITAD_API_KEY is not set")
-    itad_limiter.wait()
-    try:
-        resp = requests.get(
-            f"{_BASE}{path}",
-            params={"key": ITAD_API_KEY, **(params or {})},
-            timeout=10,
-        )
-    except requests.RequestException as exc:
-        raise ITADError(f"{path}: {type(exc).__name__}") from None
-    if resp.status_code == 429:
-        raise ITADError(f"{path}: rate limited (HTTP 429)")
+    for attempt in range(RATE_LIMIT_RETRIES + 1):
+        itad_limiter.wait()
+        try:
+            resp = requests.get(
+                f"{_BASE}{path}",
+                params={"key": ITAD_API_KEY, **(params or {})},
+                timeout=10,
+            )
+        except requests.RequestException as exc:
+            raise ITADError(f"{path}: {type(exc).__name__}") from None
+        if resp.status_code != 429:
+            break
+        if attempt == RATE_LIMIT_RETRIES:
+            raise ITADError(f"{path}: rate limited (HTTP 429)")
+        wait = _backoff_seconds(resp, attempt)
+        logger.warning("%s rate limited by ITAD, waiting %ds (retry %d/%d)",
+                       path, wait, attempt + 1, RATE_LIMIT_RETRIES)
+        time.sleep(wait)
     if resp.status_code >= 400:
         raise ITADError(f"{path}: HTTP {resp.status_code}")
     try:

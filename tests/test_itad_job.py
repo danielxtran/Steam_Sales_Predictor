@@ -23,8 +23,8 @@ def db(migrated_engine):
 
 @pytest.fixture
 def itad_http(monkeypatch):
-    """Queue fake ITAD responses; no real requests, no waiting."""
-    queue, calls = [], []
+    """Queue fake ITAD responses; no real requests, and sleeps are recorded, not waited."""
+    queue, calls, sleeps = [], [], []
 
     def fake_get(url, params=None, timeout=None):
         calls.append((url, params))
@@ -36,7 +36,8 @@ def itad_http(monkeypatch):
     monkeypatch.setattr(itad, "ITAD_API_KEY", "SECRET-ITAD-KEY")
     monkeypatch.setattr(itad.requests, "get", fake_get)
     monkeypatch.setattr(itad, "itad_limiter", itad.RateLimiter(0))
-    return queue, calls
+    monkeypatch.setattr(itad.time, "sleep", sleeps.append)
+    return queue, calls, sleeps
 
 
 def found():
@@ -58,7 +59,7 @@ def test_pending_games_hot_then_most_reviewed(db):
 
 
 def test_backfill_stores_steam_history_and_marks_games(db, itad_http):
-    queue, calls = itad_http
+    queue, calls, sleeps = itad_http
     queue += [found(), history(),                          # 30: found, has history
               FakeResponse(200, {"found": False})]         # 20: ITAD doesn't know it
 
@@ -79,7 +80,7 @@ def test_backfill_stores_steam_history_and_marks_games(db, itad_http):
 
 
 def test_failed_request_is_retried_next_run(db, itad_http):
-    queue, _ = itad_http
+    queue, _, _ = itad_http
     queue += [FakeResponse(500), FakeResponse(200, {"found": False})]
 
     summary = itad_job.run(limit=2, session_factory=db)
@@ -89,20 +90,34 @@ def test_failed_request_is_retried_next_run(db, itad_http):
     assert checked(db)[20] is True
 
 
-def test_rate_limit_stops_the_run(db, itad_http):
-    queue, calls = itad_http
-    queue += [FakeResponse(429)]
+def test_rate_limit_is_waited_out_and_the_run_continues(db, itad_http):
+    queue, calls, sleeps = itad_http
+    queue += [FakeResponse(429, headers={"Retry-After": "5"}), found(), history(),
+              FakeResponse(429), FakeResponse(200, {"found": False})]
+
+    summary = itad_job.run(limit=2, session_factory=db)
+
+    assert (summary.checked, summary.changed, summary.failed) == (2, 1, 0)
+    assert "stopped" not in summary.extra
+    assert sleeps == [5, 30]     # Retry-After when given, else 30s
+    assert checked(db)[30] and checked(db)[20]
+
+
+def test_persistent_rate_limit_stops_the_run(db, itad_http):
+    queue, calls, sleeps = itad_http
+    queue += [FakeResponse(429)] * 4
 
     summary = itad_job.run(limit=10, session_factory=db)
 
     assert summary.extra["stopped"] == "rate limited"
-    assert len(calls) == 1
+    assert len(calls) == 4
+    assert sleeps == [30, 60, 120]   # no wait after the last attempt
     assert not any(checked(db).values())
 
 
 def test_repeated_errors_stop_the_run(db, itad_http, monkeypatch):
     monkeypatch.setattr(itad_job, "MAX_CONSECUTIVE_FAILURES", 2)
-    queue, calls = itad_http
+    queue, calls, sleeps = itad_http
     queue += [FakeResponse(503), FakeResponse(503)]
 
     summary = itad_job.run(limit=10, session_factory=db)
@@ -112,7 +127,7 @@ def test_repeated_errors_stop_the_run(db, itad_http, monkeypatch):
 
 
 def test_errors_never_include_the_api_key(db, itad_http, caplog):
-    queue, _ = itad_http
+    queue, _, _ = itad_http
     queue += [requests.ConnectionError("failed: ...?key=SECRET-ITAD-KEY&appid=30")] * 5
 
     with caplog.at_level(logging.WARNING):
@@ -130,7 +145,7 @@ def test_missing_key_raises_instead_of_silently_skipping(monkeypatch):
 
 
 def test_full_history_resets_lookups(db, itad_http):
-    queue, _ = itad_http
+    queue, _, _ = itad_http
     queue += [found(), history()]
     itad_job.run(limit=1, session_factory=db)
     assert checked(db)[30] is True
