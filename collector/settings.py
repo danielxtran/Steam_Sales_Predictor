@@ -20,8 +20,14 @@ def resolve_database_url(url: str | None) -> str:
 
     Relative SQLite paths are anchored to the project root so they resolve to the same
     file no matter which directory the code is run from (e.g. notebooks/).
+    Plain postgresql:// URLs (as Neon gives them) use the psycopg 3 driver.
     """
-    parsed = make_url(url or "sqlite:///data/steam_prices.db")
+    url = url or "sqlite:///data/steam_prices.db"
+    if url.startswith("postgres://"):
+        url = "postgresql://" + url[len("postgres://"):]
+    parsed = make_url(url)
+    if parsed.drivername == "postgresql":
+        parsed = parsed.set(drivername="postgresql+psycopg")
     if parsed.get_backend_name() == "sqlite" and parsed.database and parsed.database != ":memory:":
         path = Path(parsed.database)
         if not path.is_absolute():

@@ -26,3 +26,15 @@ One dated line per decision, newest at the bottom.
 - 2026-11-10: Release dates are stored as dates only when Steam gives an exact day; quarters, months, and "Coming soon" become NULL.
 - 2026-11-10: Steam and ITAD parsers return integer cents (Steam's own cent values; ITAD's `amountInt`) so no float dollars enter the database.
 - 2026-11-10: Migrate old data by copying into a fresh, empty database in one transaction rather than upgrading in place; ITAD timestamps from the old file are treated as UTC because their offset was never stored.
+- 2026-11-11: Fetch prices with batched `appdetails?filters=price_overview` calls of 100 IDs: the experiment showed 200 work and 500 fail, so 100 leaves a margin.
+- 2026-11-11: Track full-details freshness in a separate `games.details_checked_at` column, so catalog-added games (name only) are distinguishable from fully fetched ones.
+- 2026-11-11: Use psycopg 3 for Postgres and rewrite plain `postgresql://` URLs (as Neon provides them) to `postgresql+psycopg://`.
+- 2026-11-11: Hot tier = SteamSpy top-100 lists plus Steam featured categories; if either source fails, the catalog job promotes but never demotes, so an outage can't push every game to normal.
+- 2026-11-11: A price row is written when initial_cents, final_cents, or discount_pct differ from the game's latest price_changes row from any source (Steam or ITAD).
+- 2026-11-11: Failed checks still update last_checked_at and reschedule on the normal interval, with the reason in last_error, so a broken game can't be retried in a tight loop; a run stops early after a persistent 429.
+- 2026-11-11: Space store API requests 1.5 s apart (about 200 per 5 minutes) with one shared limiter, rather than per-call sleeps.
+- 2026-11-11: Full appdetails (title, genres, ...) are fetched only for games never fetched or not fetched in 30 days, capped per run by --details-limit; all other games use batched price-only calls.
+- 2026-11-11: Scheduled workflows share one concurrency group so two jobs never write at once; prices runs at most 15 minutes (the job itself stops starting requests at 10).
+- 2026-11-13: Track ITAD lookups per game in `poll_state.itad_checked_at`, set whether or not ITAD knows the game, so unknown games aren't retried every run; failed requests leave it unset so they are retried.
+- 2026-11-13: The ITAD client raises `ITADError` on request failures instead of returning None, so a network error is never mistaken for "game not found".
+- 2026-11-13: Fill Neon's price history by re-fetching from ITAD in GitHub Actions rather than importing the local SQLite file, because Windows Smart App Control blocks the psycopg binary locally; ITAD's data also includes the regular price and correct timestamps.

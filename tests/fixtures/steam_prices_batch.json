@@ -1,0 +1,39 @@
+{
+  "620": {
+    "success": true,
+    "data": {
+      "price_overview": {
+        "currency": "USD",
+        "initial": 999,
+        "final": 999,
+        "discount_percent": 0,
+        "initial_formatted": "",
+        "final_formatted": "$9.99"
+      }
+    }
+  },
+  "570": {
+    "success": true,
+    "data": []
+  },
+  "400": {
+    "success": true,
+    "data": {
+      "price_overview": {
+        "currency": "USD",
+        "initial": 999,
+        "final": 999,
+        "discount_percent": 0,
+        "initial_formatted": "",
+        "final_formatted": "$9.99"
+      }
+    }
+  },
+  "730": {
+    "success": true,
+    "data": []
+  },
+  "1": {
+    "success": false
+  }
+}

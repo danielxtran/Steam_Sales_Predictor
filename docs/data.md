@@ -12,14 +12,29 @@ Conventions:
 
 Sources:
 
-- **Steam** — `store.steampowered.com/api/appdetails?cc=us` (`collector/sources/steam.py`).
+- **Steam** — `store.steampowered.com/api/appdetails?cc=us`, either one game with full
+  details or up to 100 games per call with `filters=price_overview`; the game list from
+  `api.steampowered.com/IStoreService/GetAppList` (needs `STEAM_API_KEY`); and
+  `store.steampowered.com/api/featuredcategories` (`collector/sources/steam.py`).
+- **SteamSpy** — the `top100in2weeks`, `top100forever`, and `top100owned` lists
+  (`collector/sources/steamspy.py`).
 - **ITAD** — IsThereAnyDeal API, `games/lookup/v1` and `games/history/v2?country=US`
   (`collector/sources/itad.py`).
 - **Old DB** — rows copied from the pre-Alembic SQLite file by `scripts/migrate_sqlite.py`.
 
+## Jobs
+
+| Job | Schedule | Reads | Writes |
+| --- | --- | --- | --- |
+| `collector.jobs.catalog` | daily | GetAppList, SteamSpy top lists, featured categories | new `games` (ID and name only) and `poll_state` rows; `poll_state.tier` |
+| `collector.jobs.prices` | every 3 hours | due `poll_state` rows; appdetails | `price_changes` (steam, only on change), `poll_state`, and for new/stale games `games` + `game_genres` |
+| `collector.jobs.itad` | daily, up to 300 games | games with no `poll_state.itad_checked_at`, hot then most-reviewed; ITAD lookup and history | `itad_games`, `price_changes` (itad), `poll_state.itad_checked_at` |
+
 ## games
 
-One row per Steam game. Updated every time the collector fetches the game.
+One row per Steam game. The catalog job adds new games with just the app ID and name;
+the prices job fills in the rest from a full appdetails call when the game is new or its
+details are more than 30 days old.
 
 | Column | Type | Source / meaning |
 | --- | --- | --- |
@@ -31,9 +46,10 @@ One row per Steam game. Updated every time the collector fetches the game.
 | `metacritic_score` | integer, nullable | Steam `metacritic.score`. |
 | `total_reviews` | integer, nullable | Steam `recommendations.total`. |
 | `is_free` | boolean | Steam `is_free`. |
-| `type` | text | Steam app `type`. Always `"game"` today; the collector skips DLC, demos, etc. |
+| `type` | text | Steam app `type`. `"game"` for everything the catalog adds; if a details fetch shows something else (e.g. `"dlc"`), the type is saved and the prices job stops checking it. |
 | `created_at` | UTC timestamp | When we first stored the game. Migrated rows use their first old price snapshot time. |
 | `updated_at` | UTC timestamp | Last time the metadata was refreshed. Migrated rows use the old `last_updated`. |
+| `details_checked_at` | UTC timestamp, nullable | Last full appdetails fetch. NULL means only the catalog's ID and name are known, so the prices job will fetch details. Existing rows were backfilled from `updated_at`. |
 
 ## genres
 
@@ -56,9 +72,13 @@ Migrated rows come from the old comma-separated `games.genres` text.
 
 ## price_changes
 
-The price time series. `steam` rows are written only when the price differs from the
-game's previous `steam` row; `itad` rows are ITAD's own list of price changes. Unique on `(app_id, observed_at, source)`, so
-re-running a job cannot create duplicates. Indexed on `(app_id, observed_at)`.
+The price time series. The prices job writes a `steam` row only when `initial_cents`,
+`final_cents`, or `discount_pct` differ from the game's latest row from any source;
+`itad` rows are ITAD's own list of price changes. Unique on `(app_id, observed_at, source)`,
+so re-running a job cannot create duplicates. Indexed on `(app_id, observed_at)`.
+
+Because migrated ITAD rows have no `initial_cents`, a game whose latest row is one of them
+gets one extra `steam` row on its first check even if the price is the same.
 
 | Column | Type | Source / meaning |
 | --- | --- | --- |
@@ -74,16 +94,19 @@ Games with no price (free, region-locked, unreleased) get no rows here.
 
 ## poll_state
 
-One row per game: when it was last checked and when it is due next. Every successful
-fetch updates `last_checked_at`, even when the price didn't change.
+One row per game: when it was last checked and when it is due next. The prices job picks
+games with `next_check_at` in the past, hot tier first, then the longest-waiting. Every
+check, successful or not, updates `last_checked_at` and schedules the next one: 6 hours
+later for hot games, 2 days later for normal ones.
 
 | Column | Type | Source / meaning |
 | --- | --- | --- |
 | `app_id` | integer, PK, FK → `games` | |
-| `tier` | text | `"hot"` (poll often) or `"normal"`. Everything is `"normal"` for now; tiering rules come later. |
-| `last_checked_at` | UTC timestamp, nullable | Last time the collector fetched this game. |
-| `next_check_at` | UTC timestamp, nullable | When the game is due. The migration sets it to the migration time, so every game is due. Not yet used by the collector. |
-| `last_error` | text, nullable | Error from the last failed check; cleared on success. |
+| `tier` | text | `"hot"` if the game is in a SteamSpy top-100 list or a Steam featured category at the last catalog run, else `"normal"`. Games that become hot are due immediately. If a hot source is unreachable, the catalog job doesn't demote anything. |
+| `last_checked_at` | UTC timestamp, nullable | Last time the prices job checked this game. |
+| `next_check_at` | UTC timestamp, nullable | When the game is next due. New games (catalog) and migrated games are due immediately. Indexed. |
+| `last_error` | text, nullable | Why the last check failed (e.g. `"/api/appdetails: rate limited (HTTP 429)"`, or `success=false` when the store doesn't sell the game in the US); cleared on success. |
+| `itad_checked_at` | UTC timestamp, nullable | When the ITAD job looked the game up, whether or not ITAD knew it. NULL means not looked up yet; failed requests leave it NULL so they are retried. Games that already had ITAD history when the column was added were marked done. |
 
 ## itad_games
 

@@ -13,3 +13,12 @@
 - Replaced the tables with the Phase 0 schema (`games`, `genres`, `game_genres`, `price_changes`, `poll_state`, `itad_games`, `sale_calendar`), created by Alembic migrations; the collector now stores cents, writes a price row only when the price changes, records last-checked time, and keeps only Steam-store ITAD history.
 - Added `scripts/migrate_sqlite.py` to copy an old-schema SQLite file (read-only) into the new schema, with tests on a tiny sample database.
 - Added `docs/data.md` describing every table and column; updated README, CLAUDE.md, and `.env.example` for migrations.
+- Added `scripts/appdetails_batch_experiment.py`, which showed `appdetails` accepts up to 200 app IDs per call with `filters=price_overview` (500 fails).
+- Added `games.details_checked_at` (backfilled from `updated_at`) and an index on `poll_state.next_check_at`.
+- Added the psycopg driver; plain `postgresql://` and `postgres://` URLs now use it.
+- Split collection into `collector.jobs.catalog` (new games, hot tier), `collector.jobs.prices` (due games, hot first, batched, saves only changes, reschedules 6 h / 2 days), and `collector.jobs.itad`; the CLI now just runs a job and the `--schedule` loop and `schedule` dependency are gone.
+- Steam client spaces store requests 1.5 s apart, backs off on HTTP 429 (Retry-After or 30/60/120 s), and never logs query strings, so the API key cannot appear in logs.
+- Added `catalog.yml` (daily) and `prices.yml` (every 3 hours, 15-minute cap) GitHub Actions workflows with manual runs, migrations first, and secrets for the database and API keys.
+- Updated README, `docs/data.md`, and CLAUDE.md for the jobs and workflows.
+- ITAD job looks each game up once (new `poll_state.itad_checked_at`), hot and most-reviewed first, spaces requests 1 s apart, stops on rate limits or repeated errors, and fails if `ITAD_API_KEY` is missing; the ITAD client no longer logs the API key or treats errors as "not found".
+- Added `itad.yml`, a daily (and manual) workflow that backfills ITAD history for up to 300 games per run.
