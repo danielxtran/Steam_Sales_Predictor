@@ -22,3 +22,4 @@
 - Updated README, `docs/data.md`, and CLAUDE.md for the jobs and workflows.
 - ITAD job looks each game up once (new `poll_state.itad_checked_at`), hot and most-reviewed first, spaces requests 1 s apart, stops on rate limits or repeated errors, and fails if `ITAD_API_KEY` is missing; the ITAD client no longer logs the API key or treats errors as "not found".
 - Added `itad.yml`, a daily (and manual) workflow that backfills ITAD history for up to 300 games per run.
+- ITAD client waits out HTTP 429 (Retry-After, or 30/60/120 s) and retries instead of ending the run at the first rate limit; the ITAD job stops only if ITAD keeps refusing.
