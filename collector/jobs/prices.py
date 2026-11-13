@@ -25,8 +25,9 @@ from collector.jobs.common import (
     RunSummary,
     apply_details,
     check_db,
+    insert_price_rows,
     latest_prices,
-    record_price,
+    price_change_row,
     setup_logging,
 )
 from collector.settings import Session
@@ -124,7 +125,9 @@ def run(limit: int = 500, details_limit: int = 50, max_seconds: float | None = N
                 summary.extra["details"] += 1
                 price = parse_price(raw.get("price_overview"))
                 last = latest_prices(session, [game.app_id]).get(game.app_id)
-                if parsed and record_price(session, game.app_id, price, checked_at, last):
+                row = price_change_row(game.app_id, price, checked_at, last) if parsed else None
+                if row:
+                    insert_price_rows(session, [row])
                     summary.changed += 1
                 _finish(state, summary)
             session.commit()
@@ -145,13 +148,17 @@ def run(limit: int = 500, details_limit: int = 50, max_seconds: float | None = N
                 continue
             checked_at = utcnow()
             latest = latest_prices(session, [g.app_id for _, g in batch])
+            new_rows = []
             for state, game in batch:
                 if game.app_id not in prices:
                     _finish(state, summary, "not available in the US store (success=false)")
                     continue
-                if record_price(session, game.app_id, prices[game.app_id], checked_at, latest.get(game.app_id)):
-                    summary.changed += 1
+                row = price_change_row(game.app_id, prices[game.app_id], checked_at, latest.get(game.app_id))
+                if row:
+                    new_rows.append(row)
                 _finish(state, summary)
+            insert_price_rows(session, new_rows)
+            summary.changed += len(new_rows)
             session.commit()
 
     return summary

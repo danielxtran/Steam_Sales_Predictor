@@ -22,3 +22,4 @@
 - Updated README, `docs/data.md`, and CLAUDE.md for the jobs and workflows.
 - ITAD job looks each game up once (new `poll_state.itad_checked_at`), hot and most-reviewed first, spaces requests 1 s apart, stops on rate limits or repeated errors, and fails if `ITAD_API_KEY` is missing; the ITAD client no longer logs the API key or treats errors as "not found".
 - Added `itad.yml`, a daily (and manual) workflow that backfills ITAD history for up to 300 games per run.
+- Prices job sends about 3 SQL statements per batch of 100 games instead of 435 (sessions no longer expire loaded rows on commit, and new price rows are inserted in one statement per batch), so runs against Neon are no longer limited by database round trips.
