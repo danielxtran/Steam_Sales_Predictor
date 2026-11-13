@@ -39,3 +39,4 @@ One dated line per decision, newest at the bottom.
 - 2026-11-13: The ITAD client raises `ITADError` on request failures instead of returning None, so a network error is never mistaken for "game not found".
 - 2026-11-13: Fill Neon's price history by re-fetching from ITAD in GitHub Actions rather than importing the local SQLite file, because Windows Smart App Control blocks the psycopg binary locally; ITAD's data also includes the regular price and correct timestamps.
 - 2026-11-13: ITAD enforces a stricter, unpublished rate limit (first scheduled run got HTTP 429 after about 100 requests in 100 s), so the client backs off and retries up to 3 times on 429 rather than stopping, letting each run use whatever ITAD allows.
+- 2026-11-13: Job sessions use `expire_on_commit=False` and new price rows are inserted with one Core INSERT per batch; a test caps SQL statements per batch so per-row round trips to Neon cannot come back unnoticed.

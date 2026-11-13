@@ -40,4 +40,7 @@ def resolve_database_url(url: str | None) -> str:
 DATABASE_URL: str = resolve_database_url(os.getenv("DATABASE_URL"))
 
 engine = create_engine(DATABASE_URL, echo=False)
-Session = sessionmaker(bind=engine)
+# Jobs commit often (every batch) and keep using the rows they loaded. Without
+# expire_on_commit=False, every commit would make the next access re-read each row,
+# one query per row, which is slow over the network to Neon.
+Session = sessionmaker(bind=engine, expire_on_commit=False)

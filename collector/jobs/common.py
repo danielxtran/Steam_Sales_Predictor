@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import func, inspect, select
+from sqlalchemy import func, insert, inspect, select
 
 from collector.db.models import Game, GameGenre, Genre, PriceChange
 from collector.settings import engine
@@ -92,17 +92,24 @@ def latest_prices(session, app_ids: list[int]) -> dict[int, PriceChange]:
     return {row.app_id: row for row in rows}
 
 
-def record_price(session, app_id: int, price: Optional[dict], now: datetime,
-                 last: Optional[PriceChange]) -> bool:
+PRICE_FIELDS = ("initial_cents", "final_cents", "discount_pct")
+
+
+def price_change_row(app_id: int, price: Optional[dict], now: datetime,
+                     last: Optional[PriceChange]) -> Optional[dict]:
     """
-    Insert a Steam price row if initial_cents, final_cents, or discount_pct differ from
-    `last`, the game's latest price_changes row. Returns True if a row was added.
+    Return a new Steam price_changes row if initial_cents, final_cents, or discount_pct
+    differ from `last` (the game's latest row), or None if nothing changed.
     """
     if price is None:
-        return False  # no price: free, or not sold right now
-    fields = ("initial_cents", "final_cents", "discount_pct")
-    if last and all(getattr(last, f) == price[f] for f in fields):
-        return False
-    session.add(PriceChange(app_id=app_id, observed_at=now, source="steam",
-                            **{f: price[f] for f in fields}))
-    return True
+        return None  # no price: free, or not sold right now
+    if last and all(getattr(last, f) == price[f] for f in PRICE_FIELDS):
+        return None
+    return {"app_id": app_id, "observed_at": now, "source": "steam",
+            **{f: price[f] for f in PRICE_FIELDS}}
+
+
+def insert_price_rows(session, rows: list[dict]) -> None:
+    """Insert new price rows in one statement (the ORM would send one INSERT per row)."""
+    if rows:
+        session.execute(insert(PriceChange), rows)
