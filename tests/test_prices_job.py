@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from collector.db.models import Game, GameGenre, PollState, PriceChange, utcnow
 from collector.jobs import prices
-from collector.jobs.common import latest_prices, record_price
+from collector.jobs.common import insert_price_rows, latest_prices, price_change_row
 from tests.conftest import FakeResponse, load_fixture
 
 
@@ -40,12 +40,12 @@ def test_same_price_adds_no_row_and_new_price_adds_one(migrated_engine):
         same = {"initial_cents": 999, "final_cents": 999, "discount_pct": 0}
         sale = {"initial_cents": 999, "final_cents": 199, "discount_pct": 80}
 
-        assert record_price(session, 620, same, now, None) is True
-        session.flush()
+        first = price_change_row(620, same, now, None)
+        assert first is not None
+        insert_price_rows(session, [first])
         last = latest_prices(session, [620])[620]
-        assert record_price(session, 620, same, now + timedelta(hours=1), last) is False
-        assert record_price(session, 620, sale, now + timedelta(hours=2), last) is True
-        session.flush()
+        assert price_change_row(620, same, now + timedelta(hours=1), last) is None
+        insert_price_rows(session, [price_change_row(620, sale, now + timedelta(hours=2), last)])
 
         assert [r.final_cents for r in steam_rows(session)] == [999, 199]
 
@@ -57,8 +57,8 @@ def test_discount_change_alone_counts_as_change(migrated_engine):
         last = PriceChange(app_id=620, observed_at=now, source="itad",
                            initial_cents=999, final_cents=999, discount_pct=10)
         session.add(last)
-        assert record_price(session, 620, {"initial_cents": 999, "final_cents": 999, "discount_pct": 0},
-                            now, last) is True
+        assert price_change_row(620, {"initial_cents": 999, "final_cents": 999, "discount_pct": 0},
+                                now, last) is not None
 
 
 def test_price_job_saves_only_changes(db, steam_http):
