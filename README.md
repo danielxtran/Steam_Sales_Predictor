@@ -54,7 +54,7 @@ Collection is split into jobs. Each ends by logging a one-line summary
 ```bash
 python -m collector.jobs.catalog            # add new games, mark hot games (daily)
 python -m collector.jobs.prices --limit 50  # re-check due games, save price changes
-python -m collector.jobs.itad --limit 100   # backfill Steam-store history from ITAD
+python -m collector.jobs.itad --limit 100   # backfill Steam-store history from ITAD (once per game)
 python -m collector.cli prices --limit 50   # same jobs through one entry point
 ```
 
@@ -66,8 +66,9 @@ are re-checked every 6 hours, normal games every 2 days. See `docs/data.md`.
 
 ### Scheduled runs (GitHub Actions)
 
-`.github/workflows/catalog.yml` runs daily and `.github/workflows/prices.yml` every
-3 hours. Both run `alembic upgrade head` first and need these repository secrets
+`.github/workflows/catalog.yml` runs daily, `.github/workflows/prices.yml` every
+3 hours, and `.github/workflows/itad.yml` daily (up to 300 ITAD lookups per run,
+most popular games first, until every game has been looked up once). All three run `alembic upgrade head` first and need these repository secrets
 (Settings > Secrets and variables > Actions): `DATABASE_URL` (the Neon Postgres URL),
 `STEAM_API_KEY`, and `ITAD_API_KEY`. To run one now: Actions tab > pick the workflow >
 **Run workflow**.

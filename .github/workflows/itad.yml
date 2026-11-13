@@ -1,0 +1,54 @@
+name: ITAD history
+
+# Backfill Steam-store price history from IsThereAnyDeal, popular games first.
+# Each game is looked up once, so runs get cheaper as the backlog shrinks.
+on:
+  schedule:
+    - cron: "37 7 * * *"   # daily at 07:37 UTC, after the catalog run
+  workflow_dispatch:
+    inputs:
+      limit:
+        description: "Max games to look up"
+        default: "300"
+
+# Never run two collection jobs against the database at once.
+concurrency:
+  group: collector
+  cancel-in-progress: false
+
+jobs:
+  itad:
+    runs-on: ubuntu-latest
+    # The job itself stops starting lookups after 12 minutes; this is the hard cap.
+    timeout-minutes: 18
+    env:
+      STEAM_API_KEY: ${{ secrets.STEAM_API_KEY }}
+      ITAD_API_KEY: ${{ secrets.ITAD_API_KEY }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Check secrets
+        run: |
+          for name in DATABASE_URL ITAD_API_KEY; do
+            if [ -z "${!name}" ]; then
+              echo "::error::The $name repository secret is not set"
+              exit 1
+            fi
+          done
+
+      - name: Install
+        run: pip install .
+
+      - name: Migrate database
+        run: alembic upgrade head
+
+      - name: Backfill ITAD history
+        env:
+          LIMIT: ${{ inputs.limit || '300' }}
+        run: python -m collector.jobs.itad --limit "$LIMIT" --max-minutes 12

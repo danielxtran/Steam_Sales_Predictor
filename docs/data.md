@@ -28,7 +28,7 @@ Sources:
 | --- | --- | --- | --- |
 | `collector.jobs.catalog` | daily | GetAppList, SteamSpy top lists, featured categories | new `games` (ID and name only) and `poll_state` rows; `poll_state.tier` |
 | `collector.jobs.prices` | every 3 hours | due `poll_state` rows; appdetails | `price_changes` (steam, only on change), `poll_state`, and for new/stale games `games` + `game_genres` |
-| `collector.jobs.itad` | manual | ITAD lookup and history | `itad_games`, `price_changes` (itad) |
+| `collector.jobs.itad` | daily, up to 300 games | games with no `poll_state.itad_checked_at`, hot then most-reviewed; ITAD lookup and history | `itad_games`, `price_changes` (itad), `poll_state.itad_checked_at` |
 
 ## games
 
@@ -106,6 +106,7 @@ later for hot games, 2 days later for normal ones.
 | `last_checked_at` | UTC timestamp, nullable | Last time the prices job checked this game. |
 | `next_check_at` | UTC timestamp, nullable | When the game is next due. New games (catalog) and migrated games are due immediately. Indexed. |
 | `last_error` | text, nullable | Why the last check failed (e.g. `"/api/appdetails: rate limited (HTTP 429)"`, or `success=false` when the store doesn't sell the game in the US); cleared on success. |
+| `itad_checked_at` | UTC timestamp, nullable | When the ITAD job looked the game up, whether or not ITAD knew it. NULL means not looked up yet; failed requests leave it NULL so they are retried. Games that already had ITAD history when the column was added were marked done. |
 
 ## itad_games
 

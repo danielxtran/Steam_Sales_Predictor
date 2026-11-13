@@ -67,7 +67,7 @@ These are settled. Do not change them without being asked; record any change in
 | `collector/cli.py` | Single entry point that runs a job: `python -m collector.cli catalog|prices|itad [job options]`. |
 | `collector/jobs/catalog.py` | Daily job: adds new games from IStoreService/GetAppList to `games` and `poll_state`; marks games in SteamSpy top lists or Steam featured categories as hot. |
 | `collector/jobs/prices.py` | Every-3-hours job: checks due games (hot first) in batches of 100, writes `price_changes` only on change, reschedules (hot 6 h, normal 2 days), fetches full details for new/stale games. |
-| `collector/jobs/itad.py` | Manual job: backfills Steam-store history from ITAD. |
+| `collector/jobs/itad.py` | Daily job: looks each game up on ITAD once (`poll_state.itad_checked_at`), hot and most-reviewed first, and stores its Steam-store history. |
 | `collector/jobs/common.py` | Shared helpers: schema check, run summary line, applying details, change detection. |
 | `collector/settings.py` | Loads `.env`, exposes `STEAM_API_KEY` / `ITAD_API_KEY`, reads `DATABASE_URL` (default `sqlite:///data/steam_prices.db`; relative SQLite paths resolve from the project root), builds the SQLAlchemy `engine` and `Session`. |
 | `collector/db/models.py` | SQLAlchemy tables: `games`, `genres`, `game_genres`, `price_changes`, `poll_state`, `itad_games`, `sale_calendar`; `UTCDateTime` type. Documented in `docs/data.md`. |
@@ -81,7 +81,7 @@ These are settled. Do not change them without being asked; record any change in
 | `notebooks/data_exploration.ipynb` | Exploratory analysis and draft ML features from the local DB. |
 | `pyproject.toml` | Package metadata, pinned runtime dependencies, `notebooks` and `dev` extras, ruff and pytest config. |
 | `.github/workflows/ci.yml` | Runs ruff and pytest on pull requests and pushes to `main`. |
-| `.github/workflows/catalog.yml`, `prices.yml` | Scheduled jobs (daily / every 3 hours, plus manual runs). Run `alembic upgrade head` first; read secrets `DATABASE_URL`, `STEAM_API_KEY`, `ITAD_API_KEY`. |
+| `.github/workflows/catalog.yml`, `prices.yml`, `itad.yml` | Scheduled jobs (daily / every 3 hours / daily, plus manual runs). Run `alembic upgrade head` first; read secrets `DATABASE_URL`, `STEAM_API_KEY`, `ITAD_API_KEY`. |
 | `.env.example` | Template listing the settings `.env` should define. |
 | `data/` | Local SQLite databases (gitignored). `steam_prices.db` is the old-schema original: never touch it. `v2.db` is the migrated Phase 0 database. |
 | `CHANGELOG.md` | One line per change. |

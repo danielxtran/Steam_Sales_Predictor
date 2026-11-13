@@ -21,3 +21,4 @@
 - Added `catalog.yml` (daily) and `prices.yml` (every 3 hours, 15-minute cap) GitHub Actions workflows with manual runs, migrations first, and secrets for the database and API keys.
 - Updated README, `docs/data.md`, and CLAUDE.md for the jobs and workflows.
 - ITAD job looks each game up once (new `poll_state.itad_checked_at`), hot and most-reviewed first, spaces requests 1 s apart, stops on rate limits or repeated errors, and fails if `ITAD_API_KEY` is missing; the ITAD client no longer logs the API key or treats errors as "not found".
+- Added `itad.yml`, a daily (and manual) workflow that backfills ITAD history for up to 300 games per run.
